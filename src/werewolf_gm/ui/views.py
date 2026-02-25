@@ -116,22 +116,19 @@ def build_setup_view(
         participant_list = ft.Column(
             controls=player_rows,
             spacing=8,
-            scroll=ft.ScrollMode.AUTO,
-            height=240,
         )
     else:
         participant_list = ft.Text("参加者はまだいません", color=ft.Colors.GREY_600)
 
     return ft.View(
         route="/setup",
+        scroll=ft.ScrollMode.AUTO,
         controls=[
             ft.SafeArea(
                 ft.Container(
                     expand=True,
                     padding=20,
                     content=ft.Column(
-                        expand=True,
-                        scroll=ft.ScrollMode.AUTO,
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=12,
                         controls=[

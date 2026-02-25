@@ -4,7 +4,7 @@ import asyncio
 
 import flet as ft
 
-from werewolf_gm.domain import Role
+from werewolf_gm.domain import DeathReason, GamePhase, Role
 
 from .state import AppState
 from .tabs import GameTab, build_navigation_bar
@@ -79,6 +79,8 @@ class WerewolfApp:
                             on_increase_timer=self._on_increase_timer,
                             on_toggle_timer=self._on_toggle_timer,
                             on_next_phase=self._on_next_phase,
+                            on_confirm_vote=self._on_confirm_vote,
+                            on_confirm_night_action=self._on_confirm_night_action,
                         ),
                     )
                 )
@@ -124,6 +126,43 @@ class WerewolfApp:
 
         self.page.go("/game")
 
+    def _on_confirm_vote(self, player_id: str) -> None:
+        try:
+            target = self.state.game.get_player(player_id)
+            self.state.game.kill_player(player_id, DeathReason.EXECUTED)
+        except ValueError as exc:
+            self._show_message(str(exc))
+            return
+
+        self.state.logs.append(f"投票処刑: {target.name}")
+        self._advance_phase()
+
+    def _on_confirm_night_action(self, player_id: str) -> None:
+        phase = self.state.game.phase
+
+        try:
+            target = self.state.game.get_player(player_id)
+            if phase is GamePhase.NIGHT_SEER:
+                self.state.game.set_seer_target(player_id)
+                self.state.logs.append(f"占い対象を選択: {target.name}")
+            elif phase is GamePhase.NIGHT_MEDIUM:
+                self.state.game.set_medium_target(player_id)
+                self.state.logs.append(f"霊媒対象を選択: {target.name}")
+            elif phase is GamePhase.NIGHT_KNIGHT:
+                self.state.game.set_guard_target(player_id)
+                self.state.logs.append(f"護衛対象を選択: {target.name}")
+            elif phase is GamePhase.NIGHT_WEREWOLF:
+                self.state.game.set_attack_target(player_id)
+                self.state.logs.append(f"襲撃対象を選択: {target.name}")
+            else:
+                self._show_message("現在は夜の行動フェーズではありません")
+                return
+        except ValueError as exc:
+            self._show_message(str(exc))
+            return
+
+        self._advance_phase()
+
     def _on_decrease_timer(self, _: ft.ControlEvent) -> None:
         self.state.adjust_timer(-30)
         if self.state.timer_seconds == 0:
@@ -145,14 +184,34 @@ class WerewolfApp:
             self._ensure_timer_loop()
 
     def _on_next_phase(self, _: ft.ControlEvent) -> None:
+        self._advance_phase()
+
+    def _advance_phase(self) -> None:
+        previous_phase = self.state.game.phase
+        previous_day = self.state.game.day
+
         self.state.game.proceed_to_next_phase()
-        self.state.reset_timer_for_current_phase()
-        self.state.timer_running = True
-        self.state.logs.append(
-            f"{self.state.game.day}日目 {self.state.game.phase.value} に移行しました"
-        )
+
+        if previous_phase is GamePhase.NIGHT_WEREWOLF:
+            if self.state.game.last_night_victim_id:
+                victim = self.state.game.get_player(self.state.game.last_night_victim_id)
+                self.state.logs.append(f"夜明け: {victim.name} が襲撃されました")
+            else:
+                self.state.logs.append("夜明け: 襲撃による犠牲者はいません")
+
+        if self.state.game.phase is not GamePhase.FINISHED:
+            if (previous_day, previous_phase) != (self.state.game.day, self.state.game.phase):
+                self.state.logs.append(
+                    f"フェーズ移行: {self.state.game.day}日目 {self.state.game.phase.value}"
+                )
+
+        self._sync_timer_with_phase()
         self._refresh_current_view()
         self._ensure_timer_loop()
+
+    def _sync_timer_with_phase(self) -> None:
+        self.state.reset_timer_for_current_phase()
+        self.state.timer_running = self.state.game.phase is not GamePhase.FINISHED
 
     def _open_abort_dialog(self) -> None:
         self.confirm_dialog = ft.AlertDialog(

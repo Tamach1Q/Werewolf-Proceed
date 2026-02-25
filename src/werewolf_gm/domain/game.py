@@ -20,6 +20,12 @@ class Game:
             reason="Game not evaluated yet.",
         )
     )
+    seer_target_id: str | None = None
+    medium_target_id: str | None = None
+    guard_target_id: str | None = None
+    attacked_player_id: str | None = None
+    last_executed_player_id: str | None = None
+    last_night_victim_id: str | None = None
 
     def add_player(self, name: str, role: Role) -> Player:
         if any(p.name == name for p in self.players):
@@ -37,10 +43,45 @@ class Game:
     def alive_players(self) -> list[Player]:
         return [p for p in self.players if p.is_alive]
 
+    def alive_players_by_role(self, role: Role) -> list[Player]:
+        return [p for p in self.alive_players() if p.role is role]
+
+    def has_alive_role(self, role: Role) -> bool:
+        return any(True for _ in self.alive_players_by_role(role))
+
     def kill_player(self, player_id: str, reason: DeathReason) -> None:
         player = self.get_player(player_id)
+        if not player.is_alive:
+            raise ValueError(f"Player already dead: {player.name}")
+
         player.kill(reason)
+        if reason is DeathReason.EXECUTED:
+            self.last_executed_player_id = player_id
         self.refresh_victory()
+
+    def set_seer_target(self, player_id: str) -> None:
+        self.seer_target_id = self._require_alive_player(player_id).id
+
+    def set_medium_target(self, player_id: str) -> None:
+        self.medium_target_id = self._require_alive_player(player_id).id
+
+    def set_guard_target(self, player_id: str) -> None:
+        self.guard_target_id = self._require_alive_player(player_id).id
+
+    def set_attack_target(self, player_id: str) -> None:
+        self.attacked_player_id = self._require_alive_player(player_id).id
+
+    def resolve_night_actions(self) -> str | None:
+        self.last_night_victim_id = None
+
+        if self.attacked_player_id and self.attacked_player_id != self.guard_target_id:
+            target = self.get_player(self.attacked_player_id)
+            if target.is_alive:
+                self.kill_player(target.id, DeathReason.ATTACKED)
+                self.last_night_victim_id = target.id
+
+        self._reset_night_action_records()
+        return self.last_night_victim_id
 
     def refresh_victory(self) -> VictoryResult:
         alive = self.alive_players()
@@ -71,10 +112,26 @@ class Game:
             return self.phase
 
         if self.phase is GamePhase.VOTING:
-            self.phase = GamePhase.NIGHT
+            self.phase = GamePhase.NIGHT_SEER
             return self.phase
 
-        # NIGHT -> next DAY
+        if self.phase is GamePhase.NIGHT_SEER:
+            self.phase = GamePhase.NIGHT_MEDIUM
+            return self.phase
+
+        if self.phase is GamePhase.NIGHT_MEDIUM:
+            self.phase = GamePhase.NIGHT_KNIGHT
+            return self.phase
+
+        if self.phase is GamePhase.NIGHT_KNIGHT:
+            self.phase = GamePhase.NIGHT_WEREWOLF
+            return self.phase
+
+        # NIGHT_WEREWOLF -> next DAY
+        self.resolve_night_actions()
+        if self.phase is GamePhase.FINISHED:
+            return self.phase
+
         self.phase = GamePhase.DAY
         self.day += 1
         return self.phase
@@ -82,3 +139,15 @@ class Game:
     @staticmethod
     def _count_actual_werewolves(players: Iterable[Player]) -> int:
         return sum(1 for p in players if p.role is Role.WEREWOLF)
+
+    def _require_alive_player(self, player_id: str) -> Player:
+        player = self.get_player(player_id)
+        if not player.is_alive:
+            raise ValueError(f"Player is not alive: {player.name}")
+        return player
+
+    def _reset_night_action_records(self) -> None:
+        self.seer_target_id = None
+        self.medium_target_id = None
+        self.guard_target_id = None
+        self.attacked_player_id = None

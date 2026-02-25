@@ -51,9 +51,7 @@ def build_setup_view(
         label="役職",
         width=340,
         value=Role.CITIZEN.value,
-        options=[
-            ft.dropdown.Option(key=role.value, text=_role_label(role)) for role in Role
-        ],
+        options=[ft.dropdown.Option(key=role.value, text=_role_label(role)) for role in Role],
     )
 
     def handle_add(_: ft.ControlEvent) -> None:
@@ -131,6 +129,8 @@ def build_game_tab_content(
     on_increase_timer: Callable[[ft.ControlEvent], None],
     on_toggle_timer: Callable[[ft.ControlEvent], None],
     on_next_phase: Callable[[ft.ControlEvent], None],
+    on_confirm_vote: Callable[[str], None],
+    on_confirm_night_action: Callable[[str], None],
 ) -> ft.Control:
     if state.selected_tab is GameTab.PROGRESS:
         return _build_progress_content(
@@ -139,6 +139,8 @@ def build_game_tab_content(
             on_increase_timer=on_increase_timer,
             on_toggle_timer=on_toggle_timer,
             on_next_phase=on_next_phase,
+            on_confirm_vote=on_confirm_vote,
+            on_confirm_night_action=on_confirm_night_action,
         )
 
     if state.selected_tab is GameTab.DASHBOARD:
@@ -165,8 +167,17 @@ def _build_progress_content(
     on_increase_timer: Callable[[ft.ControlEvent], None],
     on_toggle_timer: Callable[[ft.ControlEvent], None],
     on_next_phase: Callable[[ft.ControlEvent], None],
+    on_confirm_vote: Callable[[str], None],
+    on_confirm_night_action: Callable[[str], None],
 ) -> ft.Control:
     phase_label = _phase_label(state.game.phase)
+
+    action_panel = _build_phase_action_panel(
+        state,
+        on_next_phase=on_next_phase,
+        on_confirm_vote=on_confirm_vote,
+        on_confirm_night_action=on_confirm_night_action,
+    )
 
     return ft.Container(
         expand=True,
@@ -176,16 +187,11 @@ def _build_progress_content(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                ft.Column(
-                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                    controls=[
-                        ft.Text(
-                            f"{state.game.day}日目 - {phase_label}",
-                            size=30,
-                            weight=ft.FontWeight.BOLD,
-                            text_align=ft.TextAlign.CENTER,
-                        ),
-                    ],
+                ft.Text(
+                    f"{state.game.day}日目 - {phase_label}",
+                    size=30,
+                    weight=ft.FontWeight.BOLD,
+                    text_align=ft.TextAlign.CENTER,
                 ),
                 ft.Container(
                     alignment=ft.alignment.center,
@@ -197,15 +203,105 @@ def _build_progress_content(
                         on_toggle_running=on_toggle_timer,
                     ),
                 ),
-                ft.FilledButton(
-                    "次のフェーズへ進む",
-                    on_click=on_next_phase,
-                    width=320,
-                    height=52,
-                ),
+                ft.Container(width=340, content=action_panel),
             ],
         ),
     )
+
+
+def _build_phase_action_panel(
+    state: AppState,
+    *,
+    on_next_phase: Callable[[ft.ControlEvent], None],
+    on_confirm_vote: Callable[[str], None],
+    on_confirm_night_action: Callable[[str], None],
+) -> ft.Control:
+    alive_players = state.game.alive_players()
+
+    if state.game.phase is GamePhase.DAY:
+        return ft.FilledButton("投票フェーズへ進む", on_click=on_next_phase, width=340, height=52)
+
+    if state.game.phase is GamePhase.VOTING:
+        if not alive_players:
+            return ft.Column(
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Text("投票対象がいません"),
+                    ft.FilledButton("次へ進む", on_click=on_next_phase, width=340),
+                ],
+            )
+
+        target_dropdown = ft.Dropdown(
+            label="処刑対象",
+            width=340,
+            value=alive_players[0].id,
+            options=[ft.dropdown.Option(key=p.id, text=p.name) for p in alive_players],
+        )
+
+        def handle_vote(_: ft.ControlEvent) -> None:
+            if target_dropdown.value:
+                on_confirm_vote(target_dropdown.value)
+
+        return ft.Column(
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[
+                target_dropdown,
+                ft.FilledButton("処刑を確定する", on_click=handle_vote, width=340, height=52),
+            ],
+        )
+
+    night_role, confirm_label = _night_phase_role_and_label(state.game.phase)
+    if night_role is not None:
+        if not state.game.has_alive_role(night_role):
+            return ft.Column(
+                horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Text(
+                        "対象の役職は生存していません。待機してから次へ進んでください",
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                    ft.FilledButton("次へ進む", on_click=on_next_phase, width=340, height=52),
+                ],
+            )
+
+        if not alive_players:
+            return ft.FilledButton("次へ進む", on_click=on_next_phase, width=340, height=52)
+
+        target_dropdown = ft.Dropdown(
+            label="行動対象",
+            width=340,
+            value=alive_players[0].id,
+            options=[ft.dropdown.Option(key=p.id, text=p.name) for p in alive_players],
+        )
+
+        def handle_night_action(_: ft.ControlEvent) -> None:
+            if target_dropdown.value:
+                on_confirm_night_action(target_dropdown.value)
+
+        return ft.Column(
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[
+                target_dropdown,
+                ft.FilledButton(confirm_label, on_click=handle_night_action, width=340, height=52),
+            ],
+        )
+
+    if state.game.phase is GamePhase.FINISHED:
+        return ft.Text("ゲーム終了")
+
+    return ft.FilledButton("次のフェーズへ進む", on_click=on_next_phase, width=340, height=52)
+
+
+def _night_phase_role_and_label(phase: GamePhase) -> tuple[Role | None, str]:
+    if phase is GamePhase.NIGHT_SEER:
+        return Role.SEER, "占いを確定する"
+    if phase is GamePhase.NIGHT_MEDIUM:
+        return Role.MEDIUM, "霊媒を確定する"
+    if phase is GamePhase.NIGHT_KNIGHT:
+        return Role.KNIGHT, "護衛を確定する"
+    if phase is GamePhase.NIGHT_WEREWOLF:
+        return Role.WEREWOLF, "襲撃を確定する"
+    return None, ""
 
 
 def _build_dashboard_content(state: AppState) -> ft.Control:
@@ -275,8 +371,14 @@ def _phase_label(phase: GamePhase) -> str:
         return "昼の議論"
     if phase is GamePhase.VOTING:
         return "昼の投票"
-    if phase is GamePhase.NIGHT:
-        return "夜の行動"
+    if phase is GamePhase.NIGHT_SEER:
+        return "夜 - 占い師"
+    if phase is GamePhase.NIGHT_MEDIUM:
+        return "夜 - 霊媒師"
+    if phase is GamePhase.NIGHT_KNIGHT:
+        return "夜 - 騎士"
+    if phase is GamePhase.NIGHT_WEREWOLF:
+        return "夜 - 人狼"
     if phase is GamePhase.FINISHED:
         return "ゲーム終了"
     return "セットアップ"

@@ -36,8 +36,11 @@ class Role(str, Enum):
 class GamePhase(str, Enum):
     SETUP = "setup"
     DAY = "day"
-    NIGHT = "night"
     VOTING = "voting"
+    NIGHT_SEER = "night_seer"
+    NIGHT_MEDIUM = "night_medium"
+    NIGHT_KNIGHT = "night_knight"
+    NIGHT_WEREWOLF = "night_werewolf"
     FINISHED = "finished"
 
 

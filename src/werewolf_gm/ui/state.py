@@ -50,6 +50,13 @@ class AppState:
             return 180
         if phase is GamePhase.VOTING:
             return 90
-        if phase is GamePhase.NIGHT:
-            return 180
+        if phase in {
+            GamePhase.NIGHT_SEER,
+            GamePhase.NIGHT_MEDIUM,
+            GamePhase.NIGHT_KNIGHT,
+            GamePhase.NIGHT_WEREWOLF,
+        }:
+            return 90
+        if phase is GamePhase.FINISHED:
+            return 0
         return 180

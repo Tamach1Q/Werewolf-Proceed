@@ -143,6 +143,12 @@ class WerewolfApp:
             self._show_message("プレイヤーが不足しています")
             return
 
+        self.state.game.start_game()
+        self.state.selected_tab = GameTab.PROGRESS
+        self.state.last_morning_result = None
+        self.state.reveal = None
+        self.state.timer_running = True
+        self.state.reset_timer_for_current_phase()
         self.page.go("/game")
 
     def _on_confirm_vote(self, player_id: str) -> None:

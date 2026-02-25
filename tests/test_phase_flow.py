@@ -10,10 +10,28 @@ def _build_sample_game() -> Game:
     return game
 
 
-def test_phase_flow_cycles_day_voting_night_subphases_day() -> None:
+def test_start_game_initializes_zero_night() -> None:
     game = Game()
+    game.start_game()
+
+    assert game.day == 0
+    assert game.phase is GamePhase.NIGHT_SEER
+
+
+def test_phase_flow_skips_medium_and_knight_on_day_zero_night() -> None:
+    game = _build_sample_game()
+    game.start_game()
+
+    assert game.proceed_to_next_phase() is GamePhase.NIGHT_WEREWOLF
+    assert game.proceed_to_next_phase() is GamePhase.DAY
     assert game.day == 1
-    assert game.phase is GamePhase.DAY
+
+
+def test_phase_flow_cycles_day_voting_night_subphases_day() -> None:
+    game = _build_sample_game()
+    game.start_game()
+    game.proceed_to_next_phase()
+    game.proceed_to_next_phase()
 
     assert game.proceed_to_next_phase() is GamePhase.VOTING
     assert game.proceed_to_next_phase() is GamePhase.NIGHT_SEER
@@ -82,6 +100,16 @@ def test_get_executed_player_on_day_returns_player() -> None:
 
     assert executed is not None
     assert executed.id == citizen.id
+
+
+def test_medium_target_accepts_executed_player() -> None:
+    game = _build_sample_game()
+    citizen = next(p for p in game.players if p.name == "Citizen")
+
+    game.kill_player(citizen.id, DeathReason.EXECUTED)
+    game.set_medium_target(citizen.id)
+
+    assert game.medium_target_id == citizen.id
 
 
 def test_remove_player_deletes_from_list() -> None:

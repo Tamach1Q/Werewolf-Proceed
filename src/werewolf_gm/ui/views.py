@@ -238,14 +238,17 @@ def build_game_tab_content(
         padding=20,
         content=ft.Column(
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
             controls=[
                 ft.Text("ログ画面", size=24, weight=ft.FontWeight.BOLD),
                 ft.Text("進行ログ"),
                 ft.Divider(),
-                ft.Column(
-                    controls=[ft.Text(log) for log in state.logs] or [ft.Text("ログはまだありません")],
-                    spacing=8,
+                ft.Container(
+                    expand=True,
+                    content=ft.ListView(
+                        expand=True,
+                        spacing=8,
+                        controls=[ft.Text(log) for log in state.logs] or [ft.Text("ログはまだありません")],
+                    ),
                 ),
             ]
         ),
@@ -352,6 +355,18 @@ def _build_phase_action_panel(
             controls=[
                 target_dropdown,
                 ft.FilledButton("処刑を確定する", on_click=handle_vote, width=340, height=52),
+            ],
+        )
+
+    if state.game.phase is GamePhase.NIGHT_WEREWOLF and state.game.day == 0:
+        return ft.Column(
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[
+                ft.Text(
+                    "0日目は人狼の顔合わせです。タイマー終了後に次へ進んでください",
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                ft.FilledButton("次へ進む", on_click=on_next_phase, width=340, height=52),
             ],
         )
 
@@ -547,7 +562,10 @@ def _build_dashboard_content(state: AppState) -> ft.Control:
             controls=[
                 ft.Text("ダッシュボード", size=24, weight=ft.FontWeight.BOLD),
                 ft.Text(f"登録プレイヤー数: {len(state.game.players)}"),
-                ft.ListView(expand=True, spacing=8, controls=cards),
+                ft.Container(
+                    expand=True,
+                    content=ft.ListView(expand=True, spacing=8, controls=cards),
+                ),
             ]
         ),
     )

@@ -44,6 +44,16 @@ class Game:
                 return
         raise ValueError(f"Player not found: {player_id}")
 
+    def start_game(self) -> None:
+        self.day = 0
+        self.phase = GamePhase.NIGHT_SEER
+        self.last_executed_player_id = None
+        self.last_night_victim_id = None
+        self.last_guard_target_id = None
+        self.last_attack_target_id = None
+        self._reset_night_action_records()
+        self.refresh_victory()
+
     def get_player(self, player_id: str) -> Player:
         for player in self.players:
             if player.id == player_id:
@@ -80,7 +90,7 @@ class Game:
         self.seer_target_id = self._require_alive_player(player_id).id
 
     def set_medium_target(self, player_id: str) -> None:
-        self.medium_target_id = self._require_alive_player(player_id).id
+        self.medium_target_id = self.get_player(player_id).id
 
     def set_guard_target(self, player_id: str) -> None:
         self.guard_target_id = self._require_alive_player(player_id).id
@@ -135,6 +145,9 @@ class Game:
             return self.phase
 
         if self.phase is GamePhase.NIGHT_SEER:
+            if self.day == 0:
+                self.phase = GamePhase.NIGHT_WEREWOLF
+                return self.phase
             self.phase = GamePhase.NIGHT_MEDIUM
             return self.phase
 
@@ -147,6 +160,12 @@ class Game:
             return self.phase
 
         # NIGHT_WEREWOLF -> next DAY
+        if self.day == 0:
+            self._reset_night_action_records()
+            self.phase = GamePhase.DAY
+            self.day = 1
+            return self.phase
+
         self.resolve_night_actions()
         if self.phase is GamePhase.FINISHED:
             return self.phase

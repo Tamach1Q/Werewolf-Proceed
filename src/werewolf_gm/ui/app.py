@@ -4,7 +4,7 @@ import asyncio
 
 import flet as ft
 
-from werewolf_gm.domain import DeathReason, GamePhase, Role
+from werewolf_gm.domain import DeathReason, FirstDaySeerRule, GamePhase, Role
 
 from .state import AppState
 from .tabs import GameTab, build_navigation_bar
@@ -138,11 +138,20 @@ class WerewolfApp:
         self.state.logs.append(f"セットアップ: 参加者削除 {player.name}（{player.role.value}）")
         self._refresh_current_view()
 
-    def _on_start_game(self, _: ft.ControlEvent) -> None:
+    def _on_start_game(
+        self,
+        day_seconds: int,
+        night_seconds: int,
+        first_day_seer: FirstDaySeerRule,
+    ) -> None:
         if not self.state.can_start_game:
             self._show_message("プレイヤーが不足しています")
             return
 
+        self.state.setup_day_seconds = day_seconds
+        self.state.setup_night_seconds = night_seconds
+        self.state.setup_first_day_seer = first_day_seer
+        self.state.apply_setup_rules_to_game()
         self.state.game.start_game()
         self.state.selected_tab = GameTab.PROGRESS
         self.state.last_morning_result = None

@@ -4,7 +4,7 @@ from typing import Callable
 
 import flet as ft
 
-from werewolf_gm.domain import GamePhase, Role, Team
+from werewolf_gm.domain import FirstDaySeerRule, GamePhase, Role, Team
 
 from .components import build_timer_panel
 from .state import AppState, MIN_PLAYERS_TO_START
@@ -41,7 +41,7 @@ def build_setup_view(
     *,
     on_add_player: Callable[[str, Role], None],
     on_remove_player: Callable[[str], None],
-    on_start_game: Callable[[ft.ControlEvent], None],
+    on_start_game: Callable[[int, int, FirstDaySeerRule], None],
 ) -> ft.View:
     name_input = ft.TextField(
         label="プレイヤー名",
@@ -58,6 +58,53 @@ def build_setup_view(
     def handle_add(_: ft.ControlEvent) -> None:
         role_value = role_selector.value or Role.CITIZEN.value
         on_add_player((name_input.value or "").strip(), Role(role_value))
+
+    day_seconds_selector = ft.Dropdown(
+        label="昼の議論時間",
+        width=340,
+        value=str(state.setup_day_seconds),
+        options=[ft.dropdown.Option(key=str(seconds), text=f"{seconds}秒") for seconds in _rule_day_seconds_options()],
+    )
+    night_seconds_selector = ft.Dropdown(
+        label="夜の行動時間",
+        width=340,
+        value=str(state.setup_night_seconds),
+        options=[ft.dropdown.Option(key=str(seconds), text=f"{seconds}秒") for seconds in _rule_night_seconds_options()],
+    )
+    first_day_seer_selector = ft.Dropdown(
+        label="初日占いルール",
+        width=340,
+        value=state.setup_first_day_seer.value,
+        options=[
+            ft.dropdown.Option(key=rule.value, text=_first_day_seer_label(rule))
+            for rule in FirstDaySeerRule
+        ],
+    )
+
+    def handle_day_seconds_change(event: ft.ControlEvent) -> None:
+        selected = event.control.value
+        if selected:
+            state.setup_day_seconds = int(selected)
+
+    def handle_night_seconds_change(event: ft.ControlEvent) -> None:
+        selected = event.control.value
+        if selected:
+            state.setup_night_seconds = int(selected)
+
+    def handle_first_day_seer_change(event: ft.ControlEvent) -> None:
+        selected = event.control.value
+        if selected:
+            state.setup_first_day_seer = FirstDaySeerRule(selected)
+
+    day_seconds_selector.on_change = handle_day_seconds_change
+    night_seconds_selector.on_change = handle_night_seconds_change
+    first_day_seer_selector.on_change = handle_first_day_seer_change
+
+    def handle_start(_: ft.ControlEvent) -> None:
+        day_seconds = int(day_seconds_selector.value or state.setup_day_seconds)
+        night_seconds = int(night_seconds_selector.value or state.setup_night_seconds)
+        first_day_seer = FirstDaySeerRule(first_day_seer_selector.value or state.setup_first_day_seer.value)
+        on_start_game(day_seconds, night_seconds, first_day_seer)
 
     player_rows = [
         _build_setup_player_row(player_id=player.id, name=player.name, role=player.role, on_remove_player=on_remove_player)
@@ -97,9 +144,14 @@ def build_setup_view(
                             ft.Divider(height=10),
                             ft.Text("参加者リスト", size=18, weight=ft.FontWeight.W_600),
                             participant_list,
+                            ft.Divider(height=10),
+                            ft.Text("ルール設定", size=18, weight=ft.FontWeight.W_600),
+                            day_seconds_selector,
+                            night_seconds_selector,
+                            first_day_seer_selector,
                             ft.FilledButton(
                                 "ゲーム開始",
-                                on_click=on_start_game,
+                                on_click=handle_start,
                                 width=340,
                                 disabled=not state.can_start_game,
                             ),
@@ -242,13 +294,10 @@ def build_game_tab_content(
                 ft.Text("ログ画面", size=24, weight=ft.FontWeight.BOLD),
                 ft.Text("進行ログ"),
                 ft.Divider(),
-                ft.Container(
+                ft.ListView(
                     expand=True,
-                    content=ft.ListView(
-                        expand=True,
-                        spacing=8,
-                        controls=[ft.Text(log) for log in state.logs] or [ft.Text("ログはまだありません")],
-                    ),
+                    spacing=8,
+                    controls=[ft.Text(log) for log in state.logs] or [ft.Text("ログはまだありません")],
                 ),
             ]
         ),
@@ -270,7 +319,7 @@ def _build_progress_content(
     if state.game.phase is GamePhase.FINISHED:
         return _build_finished_content(state, on_finish_game=on_finish_game)
 
-    phase_label = _phase_label(state.game.phase)
+    phase_label = _phase_label(state, state.game.phase)
     morning_result = _build_morning_result(state)
     action_panel = _build_phase_action_panel(
         state,
@@ -511,6 +560,7 @@ def _build_dashboard_content(state: AppState) -> ft.Control:
             expand=True,
             padding=20,
             content=ft.Column(
+                expand=True,
                 controls=[
                     ft.Text("ダッシュボード", size=24, weight=ft.FontWeight.BOLD),
                     ft.Text("プレイヤーが未登録です。セットアップで追加してください。"),
@@ -562,31 +612,47 @@ def _build_dashboard_content(state: AppState) -> ft.Control:
             controls=[
                 ft.Text("ダッシュボード", size=24, weight=ft.FontWeight.BOLD),
                 ft.Text(f"登録プレイヤー数: {len(state.game.players)}"),
-                ft.Container(
-                    expand=True,
-                    content=ft.ListView(expand=True, spacing=8, controls=cards),
-                ),
+                ft.ListView(expand=True, spacing=8, controls=cards),
             ]
         ),
     )
 
 
-def _phase_label(phase: GamePhase) -> str:
+def _phase_label(state: AppState, phase: GamePhase) -> str:
     if phase is GamePhase.DAY:
         return "昼の議論"
     if phase is GamePhase.VOTING:
         return "昼の投票"
     if phase is GamePhase.NIGHT_SEER:
-        return "夜 - 占い師"
+        return _night_phase_label_with_players(state, phase, "夜 - 占い師", Role.SEER)
     if phase is GamePhase.NIGHT_MEDIUM:
-        return "夜 - 霊媒師"
+        return _night_phase_label_with_players(state, phase, "夜 - 霊媒師", Role.MEDIUM)
     if phase is GamePhase.NIGHT_KNIGHT:
-        return "夜 - 騎士"
+        return _night_phase_label_with_players(state, phase, "夜 - 騎士", Role.KNIGHT)
     if phase is GamePhase.NIGHT_WEREWOLF:
-        return "夜 - 人狼"
+        return _night_phase_label_with_players(state, phase, "夜 - 人狼", Role.WEREWOLF)
     if phase is GamePhase.FINISHED:
         return "ゲーム終了"
     return "セットアップ"
+
+
+def _night_phase_label_with_players(
+    state: AppState,
+    phase: GamePhase,
+    base_label: str,
+    role: Role,
+) -> str:
+    if phase not in {
+        GamePhase.NIGHT_SEER,
+        GamePhase.NIGHT_MEDIUM,
+        GamePhase.NIGHT_KNIGHT,
+        GamePhase.NIGHT_WEREWOLF,
+    }:
+        return base_label
+
+    names = [player.name for player in state.game.alive_players() if player.role is role]
+    suffix = ", ".join(names) if names else "生存者なし"
+    return f"{base_label} ({suffix})"
 
 
 def _winner_label(state: AppState) -> str:
@@ -608,3 +674,20 @@ def _role_label(role: Role) -> str:
         Role.MEDIUM: "霊媒師",
     }
     return labels[role]
+
+
+def _first_day_seer_label(rule: FirstDaySeerRule) -> str:
+    labels = {
+        FirstDaySeerRule.RANDOM_WHITE: "ランダム白",
+        FirstDaySeerRule.FREE_SELECT: "自由選択",
+        FirstDaySeerRule.NONE: "なし",
+    }
+    return labels[rule]
+
+
+def _rule_day_seconds_options() -> list[int]:
+    return [120, 180, 240, 300, 420]
+
+
+def _rule_night_seconds_options() -> list[int]:
+    return [60, 90, 120, 150, 180]

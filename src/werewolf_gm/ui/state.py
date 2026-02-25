@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from werewolf_gm.domain import Game, GamePhase
+from werewolf_gm.domain import FirstDaySeerRule, Game, GamePhase, GameRules
 
 from .tabs import GameTab
 
@@ -22,6 +22,9 @@ class AppState:
     game: Game = field(default_factory=Game)
     selected_tab: GameTab = GameTab.PROGRESS
     logs: list[str] = field(default_factory=list)
+    setup_day_seconds: int = 180
+    setup_night_seconds: int = 90
+    setup_first_day_seer: FirstDaySeerRule = FirstDaySeerRule.FREE_SELECT
 
     show_result_overlay: bool = False
     last_action_result: bool | None = None
@@ -32,10 +35,12 @@ class AppState:
     last_morning_result: str | None = None
 
     def __post_init__(self) -> None:
+        self.sync_setup_rules_from_game()
         self.reset_timer_for_current_phase()
 
     def reset_game(self) -> None:
         self.game = Game()
+        self.apply_setup_rules_to_game()
         self.selected_tab = GameTab.PROGRESS
         self.logs.clear()
 
@@ -53,6 +58,18 @@ class AppState:
 
     def reset_timer_for_current_phase(self) -> None:
         self.timer_seconds = self._initial_seconds_for_phase(self.game.phase)
+
+    def sync_setup_rules_from_game(self) -> None:
+        self.setup_day_seconds = self.game.rules.day_seconds
+        self.setup_night_seconds = self.game.rules.night_seconds
+        self.setup_first_day_seer = self.game.rules.first_day_seer
+
+    def apply_setup_rules_to_game(self) -> None:
+        self.game.rules = GameRules(
+            day_seconds=self.setup_day_seconds,
+            night_seconds=self.setup_night_seconds,
+            first_day_seer=self.setup_first_day_seer,
+        )
 
     def adjust_timer(self, delta_seconds: int) -> None:
         self.timer_seconds = max(0, self.timer_seconds + delta_seconds)
@@ -75,19 +92,16 @@ class AppState:
     def close_reveal(self) -> None:
         self.reveal = None
 
-    @staticmethod
-    def _initial_seconds_for_phase(phase: GamePhase) -> int:
-        if phase is GamePhase.DAY:
-            return 180
-        if phase is GamePhase.VOTING:
-            return 90
+    def _initial_seconds_for_phase(self, phase: GamePhase) -> int:
+        if phase in {GamePhase.DAY, GamePhase.VOTING}:
+            return self.game.rules.day_seconds
         if phase in {
             GamePhase.NIGHT_SEER,
             GamePhase.NIGHT_MEDIUM,
             GamePhase.NIGHT_KNIGHT,
             GamePhase.NIGHT_WEREWOLF,
         }:
-            return 90
+            return self.game.rules.night_seconds
         if phase is GamePhase.FINISHED:
             return 0
-        return 180
+        return self.game.rules.day_seconds

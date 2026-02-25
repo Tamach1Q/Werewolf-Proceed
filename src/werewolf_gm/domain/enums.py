@@ -44,6 +44,12 @@ class GamePhase(str, Enum):
     FINISHED = "finished"
 
 
+class FirstDaySeerRule(str, Enum):
+    RANDOM_WHITE = "random_white"
+    FREE_SELECT = "free_select"
+    NONE = "none"
+
+
 class DeathReason(str, Enum):
     EXECUTED = "executed"
     ATTACKED = "attacked"

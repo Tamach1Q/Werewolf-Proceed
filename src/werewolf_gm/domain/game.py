@@ -3,9 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Iterable
 
-from .enums import DeathReason, GamePhase, Role, VictoryState
+from .enums import DeathReason, FirstDaySeerRule, GamePhase, Role, VictoryState
 from .player import Player
 from .victory import VictoryJudge, VictoryResult
+
+
+@dataclass(slots=True)
+class GameRules:
+    day_seconds: int = 180
+    night_seconds: int = 90
+    first_day_seer: FirstDaySeerRule = FirstDaySeerRule.FREE_SELECT
 
 
 @dataclass(slots=True)
@@ -13,6 +20,7 @@ class Game:
     players: list[Player] = field(default_factory=list)
     phase: GamePhase = GamePhase.DAY
     day: int = 1
+    rules: GameRules = field(default_factory=GameRules)
     victory: VictoryResult = field(
         default_factory=lambda: VictoryResult(
             state=VictoryState.ONGOING,

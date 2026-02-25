@@ -75,8 +75,13 @@ class WerewolfApp:
         if self.state.reveal is not None:
             return build_reveal_view(self.state, on_close_reveal=self._on_close_reveal)
 
+        view_scroll: ft.ScrollMode | None = None
+        if self.state.selected_tab in {GameTab.DASHBOARD, GameTab.LOG}:
+            view_scroll = ft.ScrollMode.AUTO
+
         return ft.View(
             route="/game",
+            scroll=view_scroll,
             controls=[
                 ft.SafeArea(
                     ft.Container(

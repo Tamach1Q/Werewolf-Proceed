@@ -19,7 +19,8 @@ def build_home_view(page: ft.Page) -> ft.View:
                 ft.Container(
                     expand=True,
                     padding=20,
-                    alignment=ft.alignment.center,
+                    # ▼ 修正: ft.alignment.center -> ft.Alignment(0, 0)
+                    alignment=ft.Alignment(0, 0),
                     content=ft.Column(
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         alignment=ft.MainAxisAlignment.CENTER,
@@ -129,7 +130,8 @@ def build_reveal_view(state: AppState, *, on_close_reveal: Callable[[ft.ControlE
     body = ft.Container(
         expand=True,
         bgcolor=reveal.background_color,
-        alignment=ft.alignment.center,
+        # ▼ 修正: ft.alignment.center -> ft.Alignment(0, 0)
+        alignment=ft.Alignment(0, 0),
         content=ft.Column(
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             alignment=ft.MainAxisAlignment.CENTER,

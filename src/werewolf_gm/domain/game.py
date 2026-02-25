@@ -26,6 +26,8 @@ class Game:
     attacked_player_id: str | None = None
     last_executed_player_id: str | None = None
     last_night_victim_id: str | None = None
+    last_guard_target_id: str | None = None
+    last_attack_target_id: str | None = None
 
     def add_player(self, name: str, role: Role) -> Player:
         if any(p.name == name for p in self.players):
@@ -73,6 +75,8 @@ class Game:
 
     def resolve_night_actions(self) -> str | None:
         self.last_night_victim_id = None
+        self.last_guard_target_id = self.guard_target_id
+        self.last_attack_target_id = self.attacked_player_id
 
         if self.attacked_player_id and self.attacked_player_id != self.guard_target_id:
             target = self.get_player(self.attacked_player_id)

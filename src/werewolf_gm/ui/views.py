@@ -4,7 +4,7 @@ from typing import Callable
 
 import flet as ft
 
-from werewolf_gm.domain import GamePhase, Role
+from werewolf_gm.domain import GamePhase, Role, Team
 
 from .components import build_timer_panel
 from .state import AppState, MIN_PLAYERS_TO_START
@@ -122,6 +122,64 @@ def build_setup_view(
     )
 
 
+def build_reveal_view(state: AppState, *, on_close_reveal: Callable[[ft.ControlEvent], None]) -> ft.View:
+    assert state.reveal is not None
+
+    reveal = state.reveal
+    body = ft.Container(
+        expand=True,
+        bgcolor=reveal.background_color,
+        alignment=ft.alignment.center,
+        content=ft.Column(
+            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            alignment=ft.MainAxisAlignment.CENTER,
+            spacing=24,
+            controls=[
+                ft.Text(
+                    f"{reveal.role_label}の結果",
+                    size=24,
+                    weight=ft.FontWeight.W_600,
+                    color=ft.Colors.WHITE,
+                ),
+                ft.Text(
+                    reveal.result_text,
+                    size=54,
+                    weight=ft.FontWeight.BOLD,
+                    color=ft.Colors.WHITE,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                ft.Text(
+                    f"対象: {reveal.target_name}",
+                    size=22,
+                    color=ft.Colors.WHITE,
+                ),
+                ft.FilledButton(
+                    "確認終了",
+                    on_click=on_close_reveal,
+                    width=300,
+                    height=56,
+                    style=ft.ButtonStyle(bgcolor=ft.Colors.WHITE, color=ft.Colors.BLACK),
+                ),
+                ft.Text(
+                    "画面タップでも戻れます",
+                    size=14,
+                    color=ft.Colors.WHITE,
+                ),
+            ],
+        ),
+    )
+
+    return ft.View(
+        route="/game",
+        controls=[
+            ft.GestureDetector(
+                on_tap=on_close_reveal,
+                content=body,
+            )
+        ],
+    )
+
+
 def build_game_tab_content(
     state: AppState,
     *,
@@ -131,6 +189,7 @@ def build_game_tab_content(
     on_next_phase: Callable[[ft.ControlEvent], None],
     on_confirm_vote: Callable[[str], None],
     on_confirm_night_action: Callable[[str], None],
+    on_finish_game: Callable[[ft.ControlEvent], None],
 ) -> ft.Control:
     if state.selected_tab is GameTab.PROGRESS:
         return _build_progress_content(
@@ -141,6 +200,7 @@ def build_game_tab_content(
             on_next_phase=on_next_phase,
             on_confirm_vote=on_confirm_vote,
             on_confirm_night_action=on_confirm_night_action,
+            on_finish_game=on_finish_game,
         )
 
     if state.selected_tab is GameTab.DASHBOARD:
@@ -151,8 +211,8 @@ def build_game_tab_content(
         padding=20,
         content=ft.Column(
             controls=[
-                ft.Text("ログ画面です", size=24, weight=ft.FontWeight.BOLD),
-                ft.Text("イベント履歴の表示をここに実装予定"),
+                ft.Text("ログ画面", size=24, weight=ft.FontWeight.BOLD),
+                ft.Text("進行ログ"),
                 ft.Divider(),
                 ft.Column([ft.Text(log) for log in state.logs] or [ft.Text("ログはまだありません")]),
             ]
@@ -169,9 +229,12 @@ def _build_progress_content(
     on_next_phase: Callable[[ft.ControlEvent], None],
     on_confirm_vote: Callable[[str], None],
     on_confirm_night_action: Callable[[str], None],
+    on_finish_game: Callable[[ft.ControlEvent], None],
 ) -> ft.Control:
-    phase_label = _phase_label(state.game.phase)
+    if state.game.phase is GamePhase.FINISHED:
+        return _build_finished_content(state, on_finish_game=on_finish_game)
 
+    phase_label = _phase_label(state.game.phase)
     action_panel = _build_phase_action_panel(
         state,
         on_next_phase=on_next_phase,
@@ -286,10 +349,58 @@ def _build_phase_action_panel(
             ],
         )
 
-    if state.game.phase is GamePhase.FINISHED:
-        return ft.Text("ゲーム終了")
-
     return ft.FilledButton("次のフェーズへ進む", on_click=on_next_phase, width=340, height=52)
+
+
+def _build_finished_content(state: AppState, *, on_finish_game: Callable[[ft.ControlEvent], None]) -> ft.Control:
+    winner_text = _winner_label(state)
+
+    rows: list[ft.Control] = []
+    for player in state.game.players:
+        is_alive = player.is_alive
+        text_color = ft.Colors.BLACK if is_alive else ft.Colors.GREY_500
+        status_text = "生存" if is_alive else "死亡"
+
+        rows.append(
+            ft.Card(
+                elevation=1,
+                content=ft.Container(
+                    padding=12,
+                    content=ft.Row(
+                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        controls=[
+                            ft.Column(
+                                spacing=2,
+                                controls=[
+                                    ft.Text(player.name, color=text_color, weight=ft.FontWeight.W_600),
+                                    ft.Text(_role_label(player.role), color=text_color),
+                                ],
+                            ),
+                            ft.Text(status_text, color=text_color),
+                        ],
+                    ),
+                ),
+            )
+        )
+
+    return ft.Container(
+        expand=True,
+        padding=20,
+        content=ft.Column(
+            spacing=12,
+            controls=[
+                ft.Text(winner_text, size=34, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+                ft.Text("最終結果", size=20, weight=ft.FontWeight.W_600),
+                ft.ListView(expand=True, spacing=8, controls=rows),
+                ft.FilledButton(
+                    "ホームに戻る（ゲーム終了）",
+                    on_click=on_finish_game,
+                    width=340,
+                    height=52,
+                ),
+            ],
+        ),
+    )
 
 
 def _night_phase_role_and_label(phase: GamePhase) -> tuple[Role | None, str]:
@@ -382,6 +493,15 @@ def _phase_label(phase: GamePhase) -> str:
     if phase is GamePhase.FINISHED:
         return "ゲーム終了"
     return "セットアップ"
+
+
+def _winner_label(state: AppState) -> str:
+    winner = state.game.victory.winner
+    if winner is Team.VILLAGER:
+        return "市民陣営の勝利！"
+    if winner is Team.WEREWOLF:
+        return "人狼陣営の勝利！"
+    return "ゲーム終了"
 
 
 def _role_label(role: Role) -> str:

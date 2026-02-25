@@ -46,6 +46,8 @@ def test_night_resolution_kills_attacked_player_when_not_guarded() -> None:
 
     assert citizen.is_alive is False
     assert game.last_night_victim_id == citizen.id
+    assert game.last_guard_target_id == knight.id
+    assert game.last_attack_target_id == citizen.id
     assert game.guard_target_id is None
     assert game.attacked_player_id is None
     assert game.phase is GamePhase.DAY
@@ -65,5 +67,7 @@ def test_night_resolution_blocks_attack_when_guarded() -> None:
 
     assert citizen.is_alive is True
     assert game.last_night_victim_id is None
+    assert game.last_guard_target_id == citizen.id
+    assert game.last_attack_target_id == citizen.id
     assert game.phase is GamePhase.DAY
     assert game.day == 2

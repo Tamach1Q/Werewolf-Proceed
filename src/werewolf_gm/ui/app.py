@@ -166,7 +166,7 @@ class WerewolfApp:
         self.state.reset_timer_for_current_phase()
         self.page.go("/game")
 
-    def _on_confirm_vote(self, player_id: str) -> None:
+    def _execute_vote(self, player_id: str) -> None:
         try:
             target = self.state.game.get_player(player_id)
             self.state.game.kill_player(player_id, DeathReason.EXECUTED)
@@ -176,6 +176,36 @@ class WerewolfApp:
 
         self._add_log(f"投票で {target.name} が処刑された")
         self._advance_phase()
+
+    def _on_confirm_vote(self, player_id: str) -> None:
+        try:
+            target = self.state.game.get_player(player_id)
+        except ValueError as exc:
+            self._show_message(str(exc))
+            return
+
+        def handle_cancel(_: ft.ControlEvent) -> None:
+            dialog.open = False
+            self.page.update()
+
+        def handle_confirm(_: ft.ControlEvent) -> None:
+            dialog.open = False
+            self.page.update()
+            self._execute_vote(player_id)
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("処刑の確認"),
+            content=ft.Text(f"本当に {target.name} を処刑しますか？"),
+            actions=[
+                ft.TextButton("いいえ", on_click=handle_cancel),
+                ft.FilledButton("はい", on_click=handle_confirm),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.page.dialog = dialog
+        dialog.open = True
+        self.page.update()
 
     def _on_confirm_night_action(self, player_id: str) -> None:
         phase = self.state.game.phase

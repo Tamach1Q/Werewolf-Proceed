@@ -21,7 +21,9 @@ class WerewolfApp:
     def start(self) -> None:
         self._configure_page()
         self.page.on_route_change = self._on_route_change
-        self.page.go(self.page.route or "/")
+        self.page.views.clear()
+        self.page.views.append(self._build_view_for_route("/"))
+        self.page.update()
 
     def _configure_page(self) -> None:
         self.page.title = "Werewolf GM Support"

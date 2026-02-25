@@ -130,6 +130,8 @@ def build_setup_view(
                     expand=True,
                     padding=20,
                     content=ft.Column(
+                        expand=True,
+                        scroll=ft.ScrollMode.AUTO,
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                         spacing=12,
                         controls=[

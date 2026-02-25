@@ -333,6 +333,7 @@ def _build_progress_content(
     phase_label = _phase_label(state.game.phase)
     phase_actor_label = _phase_actor_label(state)
     morning_result = _build_morning_result(state)
+    is_expanded_voting = state.game.phase is GamePhase.VOTING and state.is_rpp_mode
     action_panel = _build_phase_action_panel(
         state,
         on_next_phase=on_next_phase,
@@ -369,8 +370,10 @@ def _build_progress_content(
         padding=20,
         content=ft.Column(
             expand=True,
-            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            alignment=ft.MainAxisAlignment.START if is_expanded_voting else ft.MainAxisAlignment.SPACE_BETWEEN,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+            spacing=16 if is_expanded_voting else 0,
+            scroll=ft.ScrollMode.AUTO if is_expanded_voting else None,
             controls=[
                 ft.Column(
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,

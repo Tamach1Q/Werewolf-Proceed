@@ -79,6 +79,12 @@ class WerewolfApp:
         view_scroll: ft.ScrollMode | None = None
         if self.state.selected_tab in {GameTab.DASHBOARD, GameTab.LOG}:
             view_scroll = ft.ScrollMode.AUTO
+        elif (
+            self.state.selected_tab is GameTab.PROGRESS
+            and self.state.game.phase is GamePhase.VOTING
+            and self.state.is_rpp_mode
+        ):
+            view_scroll = ft.ScrollMode.AUTO
 
         return ft.View(
             route="/game",
@@ -250,8 +256,38 @@ class WerewolfApp:
             self._show_message("RPP候補を1名以上選択してください")
             return
 
-        selected_player_id = random.choice(candidates)
-        self._on_confirm_vote(selected_player_id)
+        candidate_names: list[str] = []
+        for candidate_id in candidates:
+            try:
+                candidate_names.append(self.state.game.get_player(candidate_id).name)
+            except ValueError:
+                continue
+
+        if not candidate_names:
+            self._show_message("有効なRPP候補がいません")
+            return
+
+        quoted_names = "」か「".join(candidate_names)
+
+        def handle_cancel(_: ft.ControlEvent) -> None:
+            self._close_active_dialog()
+
+        def handle_confirm(_: ft.ControlEvent) -> None:
+            self._close_active_dialog()
+            selected_player_id = random.choice(candidates)
+            self._execute_vote(selected_player_id)
+
+        self.confirm_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("処刑の確認"),
+            content=ft.Text(f"本当に「{quoted_names}」を処刑しますか？"),
+            actions=[
+                ft.TextButton("いいえ", on_click=handle_cancel),
+                ft.FilledButton("はい", on_click=handle_confirm),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.page.show_dialog(self.confirm_dialog)
 
     def _on_confirm_night_action(self, player_id: str) -> None:
         phase = self.state.game.phase

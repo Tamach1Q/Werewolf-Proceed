@@ -382,6 +382,7 @@ def _build_progress_content(
                 ),
                 ft.Container(
                     alignment=ft.Alignment(0, 0),
+                    margin=ft.margin.only(bottom=12),
                     content=build_timer_panel(
                         timer_text=state.format_timer(),
                         is_running=state.timer_running,
@@ -391,7 +392,7 @@ def _build_progress_content(
                         on_toggle_running=on_toggle_timer,
                     ),
                 ),
-                ft.Container(width=340, content=action_panel),
+                ft.Container(width=340, margin=ft.margin.only(top=8), content=action_panel),
             ],
         ),
     )

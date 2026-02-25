@@ -185,15 +185,18 @@ class WerewolfApp:
             return
 
         def handle_cancel(_: ft.ControlEvent) -> None:
-            dialog.open = False
+            if self.confirm_dialog is None:
+                return
+            self.confirm_dialog.open = False
             self.page.update()
 
         def handle_confirm(_: ft.ControlEvent) -> None:
-            dialog.open = False
+            if self.confirm_dialog is not None:
+                self.confirm_dialog.open = False
             self.page.update()
             self._execute_vote(player_id)
 
-        dialog = ft.AlertDialog(
+        self.confirm_dialog = ft.AlertDialog(
             modal=True,
             title=ft.Text("処刑の確認"),
             content=ft.Text(f"本当に {target.name} を処刑しますか？"),
@@ -203,8 +206,8 @@ class WerewolfApp:
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        self.page.dialog = dialog
-        dialog.open = True
+        self.page.dialog = self.confirm_dialog
+        self.confirm_dialog.open = True
         self.page.update()
 
     def _on_confirm_night_action(self, player_id: str) -> None:

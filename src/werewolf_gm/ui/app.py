@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 
 import flet as ft
 
@@ -94,6 +95,9 @@ class WerewolfApp:
                             on_toggle_timer=self._on_toggle_timer,
                             on_next_phase=self._on_next_phase,
                             on_previous_phase=self._on_previous_phase,
+                            on_toggle_rpp=self._on_toggle_rpp,
+                            on_toggle_rpp_selection=self._on_toggle_rpp_selection,
+                            on_execute_rpp=self._on_execute_rpp,
                             on_confirm_vote=self._on_confirm_vote,
                             on_confirm_night_action=self._on_confirm_night_action,
                             on_finish_game=self._on_finish_game,
@@ -162,6 +166,7 @@ class WerewolfApp:
         self.state.selected_tab = GameTab.PROGRESS
         self.state.last_morning_result = None
         self.state.reveal = None
+        self.state.reset_rpp_mode()
         self.state.timer_running = True
         self.state.reset_timer_for_current_phase()
         self.page.go("/game")
@@ -175,25 +180,24 @@ class WerewolfApp:
             return
 
         self._add_log(f"投票で {target.name} が処刑された")
-        self._advance_phase()
+        self.state.reset_rpp_mode()
+        self._open_vote_result_dialog(target.name)
 
     def _on_confirm_vote(self, player_id: str) -> None:
         try:
             target = self.state.game.get_player(player_id)
+            if not target.is_alive:
+                self._show_message("死亡済みのプレイヤーは処刑できません")
+                return
         except ValueError as exc:
             self._show_message(str(exc))
             return
 
         def handle_cancel(_: ft.ControlEvent) -> None:
-            if self.confirm_dialog is None:
-                return
-            self.confirm_dialog.open = False
-            self.page.update()
+            self._close_active_dialog()
 
         def handle_confirm(_: ft.ControlEvent) -> None:
-            if self.confirm_dialog is not None:
-                self.confirm_dialog.open = False
-            self.page.update()
+            self._close_active_dialog()
             self._execute_vote(player_id)
 
         self.confirm_dialog = ft.AlertDialog(
@@ -206,9 +210,48 @@ class WerewolfApp:
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        self.page.dialog = self.confirm_dialog
-        self.confirm_dialog.open = True
-        self.page.update()
+        self.page.show_dialog(self.confirm_dialog)
+
+    def _open_vote_result_dialog(self, target_name: str) -> None:
+        def handle_next(_: ft.ControlEvent) -> None:
+            self._close_active_dialog()
+            self._advance_phase()
+
+        self.confirm_dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("処刑結果"),
+            content=ft.Text(f"{target_name} が処刑されました。"),
+            actions=[
+                ft.FilledButton("次へ（夜のターンへ）", on_click=handle_next),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        self.page.show_dialog(self.confirm_dialog)
+
+    def _on_toggle_rpp(self, _: ft.ControlEvent) -> None:
+        if self.state.is_rpp_mode:
+            self.state.reset_rpp_mode()
+        else:
+            self.state.is_rpp_mode = True
+            self.state.rpp_selected_ids.clear()
+        self._refresh_current_view()
+
+    def _on_toggle_rpp_selection(self, player_id: str, is_checked: bool) -> None:
+        if is_checked:
+            self.state.rpp_selected_ids.add(player_id)
+        else:
+            self.state.rpp_selected_ids.discard(player_id)
+        self._refresh_current_view()
+
+    def _on_execute_rpp(self, _: ft.ControlEvent) -> None:
+        alive_ids = {player.id for player in self.state.game.alive_players()}
+        candidates = [player_id for player_id in self.state.rpp_selected_ids if player_id in alive_ids]
+        if not candidates:
+            self._show_message("RPP候補を1名以上選択してください")
+            return
+
+        selected_player_id = random.choice(candidates)
+        self._on_confirm_vote(selected_player_id)
 
     def _on_confirm_night_action(self, player_id: str) -> None:
         phase = self.state.game.phase
@@ -321,6 +364,7 @@ class WerewolfApp:
 
         self.state.last_morning_result = None
         self.state.game.proceed_to_next_phase()
+        self.state.reset_rpp_mode()
 
         if previous_phase is GamePhase.NIGHT_WEREWOLF:
             self.state.last_morning_result = self._build_morning_result_message()
@@ -380,23 +424,23 @@ class WerewolfApp:
             ],
             actions_alignment=ft.MainAxisAlignment.END,
         )
-        self.page.dialog = self.confirm_dialog
-        self.confirm_dialog.open = True
-        self.page.update()
+        self.page.show_dialog(self.confirm_dialog)
 
     def _cancel_abort(self, _: ft.ControlEvent) -> None:
-        if self.confirm_dialog is None:
-            return
-        self.confirm_dialog.open = False
+        self._close_active_dialog()
         self._refresh_current_view()
 
     def _confirm_abort(self, _: ft.ControlEvent) -> None:
         self.state.reset_game()
-
-        if self.confirm_dialog is not None:
-            self.confirm_dialog.open = False
-
+        self._close_active_dialog()
         self.page.go("/setup")
+
+    def _close_active_dialog(self) -> None:
+        dialog = self.page.pop_dialog()
+        if dialog is not None:
+            dialog.open = False
+        self.confirm_dialog = None
+        self.page.update()
 
     def _show_message(self, message: str) -> None:
         self.page.snack_bar = ft.SnackBar(ft.Text(message))

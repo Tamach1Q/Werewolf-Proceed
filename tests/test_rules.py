@@ -39,3 +39,25 @@ def test_app_state_apply_setup_rules_to_game() -> None:
     assert state.game.rules.day_seconds == 300
     assert state.game.rules.night_seconds == 120
     assert state.game.rules.first_day_seer is FirstDaySeerRule.NONE
+
+
+def test_app_state_reset_rpp_mode_clears_selection() -> None:
+    state = AppState()
+    state.is_rpp_mode = True
+    state.rpp_selected_ids.update({"a", "b"})
+
+    state.reset_rpp_mode()
+
+    assert state.is_rpp_mode is False
+    assert state.rpp_selected_ids == set()
+
+
+def test_app_state_reset_game_also_resets_rpp_mode() -> None:
+    state = AppState()
+    state.is_rpp_mode = True
+    state.rpp_selected_ids.update({"a", "b"})
+
+    state.reset_game()
+
+    assert state.is_rpp_mode is False
+    assert state.rpp_selected_ids == set()

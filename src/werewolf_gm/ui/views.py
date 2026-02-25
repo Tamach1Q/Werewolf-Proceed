@@ -265,6 +265,9 @@ def build_game_tab_content(
     on_toggle_timer: Callable[[ft.ControlEvent], None],
     on_next_phase: Callable[[ft.ControlEvent], None],
     on_previous_phase: Callable[[ft.ControlEvent], None],
+    on_toggle_rpp: Callable[[ft.ControlEvent], None],
+    on_toggle_rpp_selection: Callable[[str, bool], None],
+    on_execute_rpp: Callable[[ft.ControlEvent], None],
     on_confirm_vote: Callable[[str], None],
     on_confirm_night_action: Callable[[str], None],
     on_finish_game: Callable[[ft.ControlEvent], None],
@@ -278,6 +281,9 @@ def build_game_tab_content(
             on_toggle_timer=on_toggle_timer,
             on_next_phase=on_next_phase,
             on_previous_phase=on_previous_phase,
+            on_toggle_rpp=on_toggle_rpp,
+            on_toggle_rpp_selection=on_toggle_rpp_selection,
+            on_execute_rpp=on_execute_rpp,
             on_confirm_vote=on_confirm_vote,
             on_confirm_night_action=on_confirm_night_action,
             on_finish_game=on_finish_game,
@@ -314,6 +320,9 @@ def _build_progress_content(
     on_toggle_timer: Callable[[ft.ControlEvent], None],
     on_next_phase: Callable[[ft.ControlEvent], None],
     on_previous_phase: Callable[[ft.ControlEvent], None],
+    on_toggle_rpp: Callable[[ft.ControlEvent], None],
+    on_toggle_rpp_selection: Callable[[str, bool], None],
+    on_execute_rpp: Callable[[ft.ControlEvent], None],
     on_confirm_vote: Callable[[str], None],
     on_confirm_night_action: Callable[[str], None],
     on_finish_game: Callable[[ft.ControlEvent], None],
@@ -328,6 +337,9 @@ def _build_progress_content(
         state,
         on_next_phase=on_next_phase,
         on_previous_phase=on_previous_phase,
+        on_toggle_rpp=on_toggle_rpp,
+        on_toggle_rpp_selection=on_toggle_rpp_selection,
+        on_execute_rpp=on_execute_rpp,
         on_confirm_vote=on_confirm_vote,
         on_confirm_night_action=on_confirm_night_action,
     )
@@ -387,6 +399,9 @@ def _build_phase_action_panel(
     *,
     on_next_phase: Callable[[ft.ControlEvent], None],
     on_previous_phase: Callable[[ft.ControlEvent], None],
+    on_toggle_rpp: Callable[[ft.ControlEvent], None],
+    on_toggle_rpp_selection: Callable[[str, bool], None],
+    on_execute_rpp: Callable[[ft.ControlEvent], None],
     on_confirm_vote: Callable[[str], None],
     on_confirm_night_action: Callable[[str], None],
 ) -> ft.Control:
@@ -421,13 +436,34 @@ def _build_phase_action_panel(
             if target_dropdown.value:
                 on_confirm_vote(target_dropdown.value)
 
-        return ft.Column(
-            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-            controls=[
-                target_dropdown,
-                ft.FilledButton("処刑を確定する", on_click=handle_vote, width=340, height=52),
-            ],
-        )
+        controls: list[ft.Control] = [
+            target_dropdown,
+            ft.FilledButton("処刑を確定する", on_click=handle_vote, width=340, height=52),
+            ft.TextButton("RPP（ランダム処刑）モードを開く/閉じる", on_click=on_toggle_rpp),
+        ]
+
+        if state.is_rpp_mode:
+            controls.append(ft.Text("RPP候補", weight=ft.FontWeight.W_600))
+            for player in alive_players:
+                checkbox = ft.Checkbox(label=player.name, value=player.id in state.rpp_selected_ids)
+
+                def handle_change(event: ft.ControlEvent, player_id: str = player.id) -> None:
+                    on_toggle_rpp_selection(player_id, bool(event.control.value))
+
+                checkbox.on_change = handle_change
+                controls.append(checkbox)
+
+            controls.append(
+                ft.FilledButton(
+                    "選ばれた人の中からランダムに1名を処刑",
+                    on_click=on_execute_rpp,
+                    width=340,
+                    height=52,
+                    disabled=not state.rpp_selected_ids,
+                )
+            )
+
+        return ft.Column(horizontal_alignment=ft.CrossAxisAlignment.CENTER, controls=controls)
 
     if state.game.phase is GamePhase.NIGHT_WEREWOLF and state.game.day == 0:
         return add_previous_phase_button(
@@ -466,6 +502,17 @@ def _build_phase_action_panel(
             )
 
         random_white_note: ft.Control | None = None
+        excluded_role = {
+            GamePhase.NIGHT_SEER: Role.SEER,
+            GamePhase.NIGHT_KNIGHT: Role.KNIGHT,
+            GamePhase.NIGHT_WEREWOLF: Role.WEREWOLF,
+        }.get(state.game.phase)
+
+        def with_role_restriction(players: list) -> list:
+            if excluded_role is None:
+                return players
+            return [player for player in players if player.role is not excluded_role]
+
         if state.game.phase is GamePhase.NIGHT_MEDIUM:
             executed_player = state.game.get_executed_player_on_day(state.game.day)
             if executed_player is None:
@@ -489,9 +536,9 @@ def _build_phase_action_panel(
                         target_players = []
                 random_white_note = ft.Text("※ランダム白対象（自動選択）", color=ft.Colors.BLUE_GREY_700)
             else:
-                target_players = alive_players
+                target_players = with_role_restriction(alive_players)
         else:
-            target_players = alive_players
+            target_players = with_role_restriction(alive_players)
 
         if not target_players:
             fallback_message = "行動対象がいません"

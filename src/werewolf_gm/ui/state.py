@@ -25,6 +25,8 @@ class AppState:
     setup_day_seconds: int = 180
     setup_night_seconds: int = 90
     setup_first_day_seer: FirstDaySeerRule = FirstDaySeerRule.FREE_SELECT
+    is_rpp_mode: bool = False
+    rpp_selected_ids: set[str] = field(default_factory=set)
 
     show_result_overlay: bool = False
     last_action_result: bool | None = None
@@ -43,6 +45,7 @@ class AppState:
         self.apply_setup_rules_to_game()
         self.selected_tab = GameTab.PROGRESS
         self.logs.clear()
+        self.reset_rpp_mode()
 
         self.show_result_overlay = False
         self.last_action_result = None
@@ -58,6 +61,10 @@ class AppState:
 
     def reset_timer_for_current_phase(self) -> None:
         self.timer_seconds = self._initial_seconds_for_phase(self.game.phase)
+
+    def reset_rpp_mode(self) -> None:
+        self.is_rpp_mode = False
+        self.rpp_selected_ids.clear()
 
     def sync_setup_rules_from_game(self) -> None:
         self.setup_day_seconds = self.game.rules.day_seconds

@@ -444,6 +444,7 @@ def _build_phase_action_panel(
 
         if state.is_rpp_mode:
             controls.append(ft.Text("RPP候補", weight=ft.FontWeight.W_600))
+            rpp_checkboxes: list[ft.Control] = []
             for player in alive_players:
                 checkbox = ft.Checkbox(label=player.name, value=player.id in state.rpp_selected_ids)
 
@@ -451,7 +452,21 @@ def _build_phase_action_panel(
                     on_toggle_rpp_selection(player_id, bool(event.control.value))
 
                 checkbox.on_change = handle_change
-                controls.append(checkbox)
+                rpp_checkboxes.append(checkbox)
+
+            controls.append(
+                ft.Container(
+                    width=340,
+                    height=220,
+                    border=ft.border.all(1, ft.Colors.BLUE_GREY_200),
+                    border_radius=8,
+                    padding=8,
+                    content=ft.ListView(
+                        spacing=2,
+                        controls=rpp_checkboxes,
+                    ),
+                )
+            )
 
             controls.append(
                 ft.FilledButton(

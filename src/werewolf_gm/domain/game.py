@@ -36,6 +36,14 @@ class Game:
         self.players.append(player)
         return player
 
+    def remove_player(self, player_id: str) -> None:
+        for idx, player in enumerate(self.players):
+            if player.id == player_id:
+                self.players.pop(idx)
+                self._clear_player_reference(player_id)
+                return
+        raise ValueError(f"Player not found: {player_id}")
+
     def get_player(self, player_id: str) -> Player:
         for player in self.players:
             if player.id == player_id:
@@ -51,12 +59,19 @@ class Game:
     def has_alive_role(self, role: Role) -> bool:
         return any(True for _ in self.alive_players_by_role(role))
 
+    def get_executed_player_on_day(self, day: int) -> Player | None:
+        for player in self.players:
+            if player.death_reason is DeathReason.EXECUTED and player.death_day == day:
+                return player
+        return None
+
     def kill_player(self, player_id: str, reason: DeathReason) -> None:
         player = self.get_player(player_id)
         if not player.is_alive:
             raise ValueError(f"Player already dead: {player.name}")
 
         player.kill(reason)
+        player.death_day = self.day
         if reason is DeathReason.EXECUTED:
             self.last_executed_player_id = player_id
         self.refresh_victory()
@@ -155,3 +170,21 @@ class Game:
         self.medium_target_id = None
         self.guard_target_id = None
         self.attacked_player_id = None
+
+    def _clear_player_reference(self, player_id: str) -> None:
+        if self.seer_target_id == player_id:
+            self.seer_target_id = None
+        if self.medium_target_id == player_id:
+            self.medium_target_id = None
+        if self.guard_target_id == player_id:
+            self.guard_target_id = None
+        if self.attacked_player_id == player_id:
+            self.attacked_player_id = None
+        if self.last_executed_player_id == player_id:
+            self.last_executed_player_id = None
+        if self.last_night_victim_id == player_id:
+            self.last_night_victim_id = None
+        if self.last_guard_target_id == player_id:
+            self.last_guard_target_id = None
+        if self.last_attack_target_id == player_id:
+            self.last_attack_target_id = None

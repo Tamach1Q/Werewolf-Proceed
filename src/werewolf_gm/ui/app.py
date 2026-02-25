@@ -17,6 +17,7 @@ class WerewolfApp:
         self.state = AppState()
         self.confirm_dialog: ft.AlertDialog | None = None
         self._timer_loop_active = False
+        self.timer_text_ref = ft.Ref[ft.Text]()
 
     def start(self) -> None:
         self._configure_page()
@@ -49,6 +50,7 @@ class WerewolfApp:
                 self.page,
                 self.state,
                 on_add_player=self._on_add_player,
+                on_remove_player=self._on_remove_player,
                 on_start_game=self._on_start_game,
             )
         if route == "/game":
@@ -58,6 +60,7 @@ class WerewolfApp:
             self.page,
             self.state,
             on_add_player=self._on_add_player,
+            on_remove_player=self._on_remove_player,
             on_start_game=self._on_start_game,
         )
 
@@ -80,6 +83,7 @@ class WerewolfApp:
                         expand=True,
                         content=build_game_tab_content(
                             self.state,
+                            timer_text_ref=self.timer_text_ref,
                             on_decrease_timer=self._on_decrease_timer,
                             on_increase_timer=self._on_increase_timer,
                             on_toggle_timer=self._on_toggle_timer,
@@ -106,8 +110,6 @@ class WerewolfApp:
             return
 
         self.state.selected_tab = selected_tab
-        if selected_tab is GameTab.LOG:
-            self._add_log("ログ画面を開いた")
 
         self._refresh_current_view()
 
@@ -123,6 +125,17 @@ class WerewolfApp:
             return
 
         self.state.logs.append(f"セットアップ: 参加者追加 {name}（{role.value}）")
+        self._refresh_current_view()
+
+    def _on_remove_player(self, player_id: str) -> None:
+        try:
+            player = self.state.game.get_player(player_id)
+            self.state.game.remove_player(player_id)
+        except ValueError as exc:
+            self._show_message(str(exc))
+            return
+
+        self.state.logs.append(f"セットアップ: 参加者削除 {player.name}（{player.role.value}）")
         self._refresh_current_view()
 
     def _on_start_game(self, _: ft.ControlEvent) -> None:
@@ -164,6 +177,14 @@ class WerewolfApp:
                 return
 
             if phase is GamePhase.NIGHT_MEDIUM:
+                executed_player = self.state.game.get_executed_player_on_day(self.state.game.day)
+                if executed_player is None:
+                    self._show_message("本日の処刑者はいません")
+                    return
+                if executed_player.id != player_id:
+                    self._show_message("霊媒師は本日の処刑者のみ対象にできます")
+                    return
+
                 self.state.game.set_medium_target(player_id)
                 self._add_log(
                     f"霊媒師が {target.name} を霊媒し、"
@@ -235,9 +256,11 @@ class WerewolfApp:
         previous_phase = self.state.game.phase
         previous_day = self.state.game.day
 
+        self.state.last_morning_result = None
         self.state.game.proceed_to_next_phase()
 
         if previous_phase is GamePhase.NIGHT_WEREWOLF:
+            self.state.last_morning_result = self._build_morning_result_message()
             self._log_night_resolution()
 
         if (previous_day, previous_phase) != (self.state.game.day, self.state.game.phase):
@@ -266,6 +289,12 @@ class WerewolfApp:
             self._add_log(f"夜明け: {attack_name} は護衛により生存")
         else:
             self._add_log("夜明け: 襲撃による犠牲者なし")
+
+    def _build_morning_result_message(self) -> str:
+        victim_id = self.state.game.last_night_victim_id
+        if victim_id:
+            return f"昨晩の犠牲者: {self._player_name(victim_id)}"
+        return "昨晩の犠牲者はいません"
 
     def _on_finish_game(self, _: ft.ControlEvent) -> None:
         self.state.reset_game()
@@ -357,9 +386,7 @@ class WerewolfApp:
                     break
 
                 self.state.timer_seconds = max(0, self.state.timer_seconds - 1)
-
-                if self.page.route == "/game" and self.state.selected_tab is GameTab.PROGRESS:
-                    self._refresh_current_view()
+                self._update_timer_text_only()
 
             if self.state.timer_seconds == 0:
                 self.state.timer_running = False
@@ -370,3 +397,16 @@ class WerewolfApp:
             self._timer_loop_active = False
             if self.state.timer_running and self.state.timer_seconds > 0:
                 self._ensure_timer_loop()
+
+    def _update_timer_text_only(self) -> None:
+        if self.timer_text_ref.current is None:
+            return
+        if self.page.route != "/game":
+            return
+        if self.state.selected_tab is not GameTab.PROGRESS:
+            return
+        if self.state.reveal is not None:
+            return
+
+        self.timer_text_ref.current.value = self.state.format_timer()
+        self.timer_text_ref.current.update()

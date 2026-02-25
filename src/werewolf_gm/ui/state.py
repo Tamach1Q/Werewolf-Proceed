@@ -29,6 +29,7 @@ class AppState:
     timer_seconds: int = 0
     timer_running: bool = True
     reveal: RevealState | None = None
+    last_morning_result: str | None = None
 
     def __post_init__(self) -> None:
         self.reset_timer_for_current_phase()
@@ -43,6 +44,7 @@ class AppState:
         
         self.timer_running = True
         self.reveal = None
+        self.last_morning_result = None
         self.reset_timer_for_current_phase()
 
     @property

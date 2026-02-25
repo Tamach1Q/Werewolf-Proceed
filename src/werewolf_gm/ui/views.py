@@ -40,6 +40,7 @@ def build_setup_view(
     state: AppState,
     *,
     on_add_player: Callable[[str, Role], None],
+    on_remove_player: Callable[[str], None],
     on_start_game: Callable[[ft.ControlEvent], None],
 ) -> ft.View:
     name_input = ft.TextField(
@@ -59,18 +60,7 @@ def build_setup_view(
         on_add_player((name_input.value or "").strip(), Role(role_value))
 
     player_rows = [
-        ft.Container(
-            padding=10,
-            border_radius=10,
-            bgcolor=ft.Colors.BLUE_GREY_50,
-            content=ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
-                controls=[
-                    ft.Text(player.name, weight=ft.FontWeight.W_600),
-                    ft.Text(_role_label(player.role), color=ft.Colors.BLUE_GREY_700),
-                ],
-            ),
-        )
+        _build_setup_player_row(player_id=player.id, name=player.name, role=player.role, on_remove_player=on_remove_player)
         for player in state.game.players
     ]
 
@@ -119,6 +109,41 @@ def build_setup_view(
                 )
             )
         ],
+    )
+
+
+def _build_setup_player_row(
+    *,
+    player_id: str,
+    name: str,
+    role: Role,
+    on_remove_player: Callable[[str], None],
+) -> ft.Control:
+    def handle_remove(_: ft.ControlEvent) -> None:
+        on_remove_player(player_id)
+
+    return ft.Container(
+        padding=10,
+        border_radius=10,
+        bgcolor=ft.Colors.BLUE_GREY_50,
+        content=ft.Row(
+            alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            controls=[
+                ft.Column(
+                    spacing=2,
+                    controls=[
+                        ft.Text(name, weight=ft.FontWeight.W_600),
+                        ft.Text(_role_label(role), color=ft.Colors.BLUE_GREY_700),
+                    ],
+                ),
+                ft.IconButton(
+                    icon=ft.Icons.DELETE,
+                    icon_color=ft.Colors.RED_500,
+                    tooltip="削除",
+                    on_click=handle_remove,
+                ),
+            ],
+        ),
     )
 
 
@@ -183,6 +208,7 @@ def build_reveal_view(state: AppState, *, on_close_reveal: Callable[[ft.ControlE
 def build_game_tab_content(
     state: AppState,
     *,
+    timer_text_ref: ft.Ref[ft.Text] | None,
     on_decrease_timer: Callable[[ft.ControlEvent], None],
     on_increase_timer: Callable[[ft.ControlEvent], None],
     on_toggle_timer: Callable[[ft.ControlEvent], None],
@@ -194,6 +220,7 @@ def build_game_tab_content(
     if state.selected_tab is GameTab.PROGRESS:
         return _build_progress_content(
             state,
+            timer_text_ref=timer_text_ref,
             on_decrease_timer=on_decrease_timer,
             on_increase_timer=on_increase_timer,
             on_toggle_timer=on_toggle_timer,
@@ -210,11 +237,16 @@ def build_game_tab_content(
         expand=True,
         padding=20,
         content=ft.Column(
+            expand=True,
+            scroll=ft.ScrollMode.AUTO,
             controls=[
                 ft.Text("ログ画面", size=24, weight=ft.FontWeight.BOLD),
                 ft.Text("進行ログ"),
                 ft.Divider(),
-                ft.Column([ft.Text(log) for log in state.logs] or [ft.Text("ログはまだありません")]),
+                ft.Column(
+                    controls=[ft.Text(log) for log in state.logs] or [ft.Text("ログはまだありません")],
+                    spacing=8,
+                ),
             ]
         ),
     )
@@ -223,6 +255,7 @@ def build_game_tab_content(
 def _build_progress_content(
     state: AppState,
     *,
+    timer_text_ref: ft.Ref[ft.Text] | None,
     on_decrease_timer: Callable[[ft.ControlEvent], None],
     on_increase_timer: Callable[[ft.ControlEvent], None],
     on_toggle_timer: Callable[[ft.ControlEvent], None],
@@ -235,6 +268,7 @@ def _build_progress_content(
         return _build_finished_content(state, on_finish_game=on_finish_game)
 
     phase_label = _phase_label(state.game.phase)
+    morning_result = _build_morning_result(state)
     action_panel = _build_phase_action_panel(
         state,
         on_next_phase=on_next_phase,
@@ -250,17 +284,25 @@ def _build_progress_content(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                ft.Text(
-                    f"{state.game.day}日目 - {phase_label}",
-                    size=30,
-                    weight=ft.FontWeight.BOLD,
-                    text_align=ft.TextAlign.CENTER,
+                ft.Column(
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=10,
+                    controls=[
+                        ft.Text(
+                            f"{state.game.day}日目 - {phase_label}",
+                            size=30,
+                            weight=ft.FontWeight.BOLD,
+                            text_align=ft.TextAlign.CENTER,
+                        ),
+                        morning_result,
+                    ],
                 ),
                 ft.Container(
                     alignment=ft.Alignment(0, 0),
                     content=build_timer_panel(
                         timer_text=state.format_timer(),
                         is_running=state.timer_running,
+                        timer_text_ref=timer_text_ref,
                         on_decrease_30=on_decrease_timer,
                         on_increase_30=on_increase_timer,
                         on_toggle_running=on_toggle_timer,
@@ -327,14 +369,29 @@ def _build_phase_action_panel(
                 ],
             )
 
-        if not alive_players:
+        if state.game.phase is GamePhase.NIGHT_MEDIUM:
+            executed_player = state.game.get_executed_player_on_day(state.game.day)
+            if executed_player is None:
+                return ft.Column(
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.Text("本日の処刑者はいません"),
+                        ft.FilledButton("次へ進む", on_click=on_next_phase, width=340, height=52),
+                    ],
+                )
+
+            target_players = [executed_player]
+        else:
+            target_players = alive_players
+
+        if not target_players:
             return ft.FilledButton("次へ進む", on_click=on_next_phase, width=340, height=52)
 
         target_dropdown = ft.Dropdown(
             label="行動対象",
             width=340,
-            value=alive_players[0].id,
-            options=[ft.dropdown.Option(key=p.id, text=p.name) for p in alive_players],
+            value=target_players[0].id,
+            options=[ft.dropdown.Option(key=p.id, text=p.name) for p in target_players],
         )
 
         def handle_night_action(_: ft.ControlEvent) -> None:
@@ -350,6 +407,24 @@ def _build_phase_action_panel(
         )
 
     return ft.FilledButton("次のフェーズへ進む", on_click=on_next_phase, width=340, height=52)
+
+
+def _build_morning_result(state: AppState) -> ft.Control:
+    if state.game.phase is not GamePhase.DAY or not state.last_morning_result:
+        return ft.Container()
+
+    return ft.Container(
+        width=340,
+        padding=12,
+        border_radius=10,
+        bgcolor=ft.Colors.AMBER_100,
+        content=ft.Text(
+            state.last_morning_result,
+            size=16,
+            weight=ft.FontWeight.W_600,
+            text_align=ft.TextAlign.CENTER,
+        ),
+    )
 
 
 def _build_finished_content(state: AppState, *, on_finish_game: Callable[[ft.ControlEvent], None]) -> ft.Control:
@@ -468,6 +543,7 @@ def _build_dashboard_content(state: AppState) -> ft.Control:
         expand=True,
         padding=20,
         content=ft.Column(
+            expand=True,
             controls=[
                 ft.Text("ダッシュボード", size=24, weight=ft.FontWeight.BOLD),
                 ft.Text(f"登録プレイヤー数: {len(state.game.players)}"),

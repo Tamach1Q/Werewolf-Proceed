@@ -13,6 +13,7 @@ class Player:
     id: str = field(default_factory=lambda: str(uuid4()))
     is_alive: bool = True
     death_reason: DeathReason | None = None
+    death_day: int | None = None
 
     @property
     def team(self) -> Team:

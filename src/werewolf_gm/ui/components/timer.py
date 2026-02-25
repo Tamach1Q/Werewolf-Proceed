@@ -9,6 +9,7 @@ def build_timer_panel(
     *,
     timer_text: str,
     is_running: bool,
+    timer_text_ref: ft.Ref[ft.Text] | None,
     on_decrease_30: Callable[[ft.ControlEvent], None],
     on_increase_30: Callable[[ft.ControlEvent], None],
     on_toggle_running: Callable[[ft.ControlEvent], None],
@@ -18,7 +19,7 @@ def build_timer_panel(
     return ft.Column(
         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
         controls=[
-            ft.Text(timer_text, size=56, weight=ft.FontWeight.BOLD),
+            ft.Text(timer_text, ref=timer_text_ref, size=56, weight=ft.FontWeight.BOLD),
             ft.Row(
                 alignment=ft.MainAxisAlignment.CENTER,
                 controls=[

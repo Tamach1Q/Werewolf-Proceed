@@ -1,4 +1,4 @@
-from werewolf_gm.domain import Game, GamePhase, Role
+from werewolf_gm.domain import DeathReason, Game, GamePhase, Role
 
 
 def _build_sample_game() -> Game:
@@ -71,3 +71,23 @@ def test_night_resolution_blocks_attack_when_guarded() -> None:
     assert game.last_attack_target_id == citizen.id
     assert game.phase is GamePhase.DAY
     assert game.day == 2
+
+
+def test_get_executed_player_on_day_returns_player() -> None:
+    game = _build_sample_game()
+    citizen = next(p for p in game.players if p.name == "Citizen")
+
+    game.kill_player(citizen.id, DeathReason.EXECUTED)
+    executed = game.get_executed_player_on_day(game.day)
+
+    assert executed is not None
+    assert executed.id == citizen.id
+
+
+def test_remove_player_deletes_from_list() -> None:
+    game = _build_sample_game()
+    seer = next(p for p in game.players if p.name == "Seer")
+
+    game.remove_player(seer.id)
+
+    assert all(p.id != seer.id for p in game.players)

@@ -22,6 +22,10 @@ class AppState:
     game: Game = field(default_factory=Game)
     selected_tab: GameTab = GameTab.PROGRESS
     logs: list[str] = field(default_factory=list)
+
+    show_result_overlay: bool = False
+    last_action_result: bool | None = None
+
     timer_seconds: int = 0
     timer_running: bool = True
     reveal: RevealState | None = None
@@ -33,6 +37,10 @@ class AppState:
         self.game = Game()
         self.selected_tab = GameTab.PROGRESS
         self.logs.clear()
+
+        self.show_result_overlay = False
+        self.last_action_result = None
+        
         self.timer_running = True
         self.reveal = None
         self.reset_timer_for_current_phase()

@@ -1,0 +1,33 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Flet
+        run: pip install flet
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: "stable"
+
+      - name: Build APK
+        run: flet build apk . --project-name werewolf_gm --product "Werewolf GM" --org com.machida.werewolf
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: werewolf-gm-apk
+          path: build/apk/**/*.apk

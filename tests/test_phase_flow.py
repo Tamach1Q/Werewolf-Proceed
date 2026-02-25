@@ -1,4 +1,4 @@
-from werewolf_gm.domain import DeathReason, Game, GamePhase, Role
+from werewolf_gm.domain import DeathReason, FirstDaySeerRule, Game, GamePhase, Role
 
 
 def _build_sample_game() -> Game:
@@ -16,6 +16,29 @@ def test_start_game_initializes_zero_night() -> None:
 
     assert game.day == 0
     assert game.phase is GamePhase.NIGHT_SEER
+    assert game.first_day_white_target_id is None
+
+
+def test_start_game_sets_random_white_target() -> None:
+    game = _build_sample_game()
+    game.rules.first_day_seer = FirstDaySeerRule.RANDOM_WHITE
+    game.start_game()
+
+    assert game.first_day_white_target_id is not None
+    target = game.get_player(game.first_day_white_target_id)
+    assert target.role is not Role.WEREWOLF
+    assert target.role is not Role.SEER
+
+
+def test_start_game_random_white_target_can_be_none_when_no_candidate() -> None:
+    game = Game()
+    game.add_player("Wolf", Role.WEREWOLF)
+    game.add_player("Seer", Role.SEER)
+    game.rules.first_day_seer = FirstDaySeerRule.RANDOM_WHITE
+
+    game.start_game()
+
+    assert game.first_day_white_target_id is None
 
 
 def test_phase_flow_skips_medium_and_knight_on_day_zero_night() -> None:
@@ -119,3 +142,66 @@ def test_remove_player_deletes_from_list() -> None:
     game.remove_player(seer.id)
 
     assert all(p.id != seer.id for p in game.players)
+
+
+def test_revert_to_previous_night_phase_from_night_medium() -> None:
+    game = _build_sample_game()
+    game.phase = GamePhase.NIGHT_MEDIUM
+    game.seer_target_id = "dummy-seer-target"
+
+    reverted = game.revert_to_previous_night_phase()
+
+    assert reverted is True
+    assert game.phase is GamePhase.NIGHT_SEER
+    assert game.seer_target_id is None
+
+
+def test_revert_to_previous_night_phase_from_night_knight() -> None:
+    game = _build_sample_game()
+    game.phase = GamePhase.NIGHT_KNIGHT
+    game.medium_target_id = "dummy-medium-target"
+
+    reverted = game.revert_to_previous_night_phase()
+
+    assert reverted is True
+    assert game.phase is GamePhase.NIGHT_MEDIUM
+    assert game.medium_target_id is None
+
+
+def test_revert_to_previous_night_phase_from_night_werewolf_day_zero() -> None:
+    game = _build_sample_game()
+    game.day = 0
+    game.phase = GamePhase.NIGHT_WEREWOLF
+    game.seer_target_id = "dummy-seer-target"
+    game.attacked_player_id = "dummy-attack-target"
+
+    reverted = game.revert_to_previous_night_phase()
+
+    assert reverted is True
+    assert game.phase is GamePhase.NIGHT_SEER
+    assert game.seer_target_id is None
+    assert game.attacked_player_id is None
+
+
+def test_revert_to_previous_night_phase_from_night_werewolf_day_one() -> None:
+    game = _build_sample_game()
+    game.day = 1
+    game.phase = GamePhase.NIGHT_WEREWOLF
+    game.guard_target_id = "dummy-guard-target"
+    game.attacked_player_id = "dummy-attack-target"
+
+    reverted = game.revert_to_previous_night_phase()
+
+    assert reverted is True
+    assert game.phase is GamePhase.NIGHT_KNIGHT
+    assert game.guard_target_id is None
+    assert game.attacked_player_id is None
+
+
+def test_revert_to_previous_night_phase_returns_false_on_other_phase() -> None:
+    game = _build_sample_game()
+    game.phase = GamePhase.NIGHT_SEER
+
+    reverted = game.revert_to_previous_night_phase()
+
+    assert reverted is False

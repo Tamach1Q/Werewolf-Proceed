@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -36,6 +37,7 @@ class Game:
     last_night_victim_id: str | None = None
     last_guard_target_id: str | None = None
     last_attack_target_id: str | None = None
+    first_day_white_target_id: str | None = None
 
     def add_player(self, name: str, role: Role) -> Player:
         if any(p.name == name for p in self.players):
@@ -59,8 +61,41 @@ class Game:
         self.last_night_victim_id = None
         self.last_guard_target_id = None
         self.last_attack_target_id = None
+        self.first_day_white_target_id = None
+        if self.rules.first_day_seer is FirstDaySeerRule.RANDOM_WHITE:
+            candidates = [
+                player
+                for player in self.players
+                if player.role is not Role.WEREWOLF and player.role is not Role.SEER
+            ]
+            if candidates:
+                self.first_day_white_target_id = random.choice(candidates).id
         self._reset_night_action_records()
         self.refresh_victory()
+
+    def revert_to_previous_night_phase(self) -> bool:
+        if self.phase is GamePhase.NIGHT_MEDIUM:
+            self.phase = GamePhase.NIGHT_SEER
+            self.seer_target_id = None
+            return True
+
+        if self.phase is GamePhase.NIGHT_KNIGHT:
+            self.phase = GamePhase.NIGHT_MEDIUM
+            self.medium_target_id = None
+            return True
+
+        if self.phase is GamePhase.NIGHT_WEREWOLF:
+            self.attacked_player_id = None
+            if self.day == 0:
+                self.phase = GamePhase.NIGHT_SEER
+                self.seer_target_id = None
+                return True
+
+            self.phase = GamePhase.NIGHT_KNIGHT
+            self.guard_target_id = None
+            return True
+
+        return False
 
     def get_player(self, player_id: str) -> Player:
         for player in self.players:
@@ -215,3 +250,5 @@ class Game:
             self.last_guard_target_id = None
         if self.last_attack_target_id == player_id:
             self.last_attack_target_id = None
+        if self.first_day_white_target_id == player_id:
+            self.first_day_white_target_id = None

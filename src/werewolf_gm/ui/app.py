@@ -93,6 +93,7 @@ class WerewolfApp:
                             on_increase_timer=self._on_increase_timer,
                             on_toggle_timer=self._on_toggle_timer,
                             on_next_phase=self._on_next_phase,
+                            on_previous_phase=self._on_previous_phase,
                             on_confirm_vote=self._on_confirm_vote,
                             on_confirm_night_action=self._on_confirm_night_action,
                             on_finish_game=self._on_finish_game,
@@ -271,6 +272,15 @@ class WerewolfApp:
 
     def _on_next_phase(self, _: ft.ControlEvent) -> None:
         self._advance_phase()
+
+    def _on_previous_phase(self, _: ft.ControlEvent) -> None:
+        if not self.state.game.revert_to_previous_night_phase():
+            return
+
+        self._add_log("GMが1つ前の行動に戻りました")
+        self._sync_timer_with_phase()
+        self._refresh_current_view()
+        self._ensure_timer_loop()
 
     def _advance_phase(self) -> None:
         previous_phase = self.state.game.phase

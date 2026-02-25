@@ -11,8 +11,8 @@ from .victory import VictoryJudge, VictoryResult
 @dataclass(slots=True)
 class Game:
     players: list[Player] = field(default_factory=list)
-    phase: GamePhase = GamePhase.SETUP
-    day: int = 0
+    phase: GamePhase = GamePhase.DAY
+    day: int = 1
     victory: VictoryResult = field(
         default_factory=lambda: VictoryResult(
             state=VictoryState.ONGOING,
@@ -56,6 +56,28 @@ class Game:
             self.phase = GamePhase.FINISHED
 
         return self.victory
+
+    def proceed_to_next_phase(self) -> GamePhase:
+        if self.phase is GamePhase.FINISHED:
+            return self.phase
+
+        if self.phase is GamePhase.SETUP:
+            self.phase = GamePhase.DAY
+            self.day = max(self.day, 1)
+            return self.phase
+
+        if self.phase is GamePhase.DAY:
+            self.phase = GamePhase.VOTING
+            return self.phase
+
+        if self.phase is GamePhase.VOTING:
+            self.phase = GamePhase.NIGHT
+            return self.phase
+
+        # NIGHT -> next DAY
+        self.phase = GamePhase.DAY
+        self.day += 1
+        return self.phase
 
     @staticmethod
     def _count_actual_werewolves(players: Iterable[Player]) -> int:

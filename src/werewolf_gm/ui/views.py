@@ -19,7 +19,6 @@ def build_home_view(page: ft.Page) -> ft.View:
                 ft.Container(
                     expand=True,
                     padding=20,
-                    # ▼ 修正: ft.alignment.center -> ft.Alignment(0, 0)
                     alignment=ft.Alignment(0, 0),
                     content=ft.Column(
                         horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -130,7 +129,6 @@ def build_reveal_view(state: AppState, *, on_close_reveal: Callable[[ft.ControlE
     body = ft.Container(
         expand=True,
         bgcolor=reveal.background_color,
-        # ▼ 修正: ft.alignment.center -> ft.Alignment(0, 0)
         alignment=ft.Alignment(0, 0),
         content=ft.Column(
             horizontal_alignment=ft.CrossAxisAlignment.CENTER,
@@ -259,7 +257,7 @@ def _build_progress_content(
                     text_align=ft.TextAlign.CENTER,
                 ),
                 ft.Container(
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment(0, 0),
                     content=build_timer_panel(
                         timer_text=state.format_timer(),
                         is_running=state.timer_running,

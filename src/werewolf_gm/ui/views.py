@@ -648,22 +648,26 @@ def _build_finished_content(state: AppState, *, on_finish_game: Callable[[ft.Con
             )
         )
 
+    controls: list[ft.Control] = [
+        ft.Text(winner_text, size=34, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
+        ft.Text("最終結果", size=20, weight=ft.FontWeight.W_600),
+        *rows,
+        ft.FilledButton(
+            "ホームに戻る（ゲーム終了）",
+            on_click=on_finish_game,
+            width=340,
+            height=52,
+        ),
+    ]
+
     return ft.Container(
         expand=True,
         padding=20,
         content=ft.Column(
+            expand=True,
             spacing=12,
-            controls=[
-                ft.Text(winner_text, size=34, weight=ft.FontWeight.BOLD, text_align=ft.TextAlign.CENTER),
-                ft.Text("最終結果", size=20, weight=ft.FontWeight.W_600),
-                ft.ListView(expand=True, spacing=8, controls=rows),
-                ft.FilledButton(
-                    "ホームに戻る（ゲーム終了）",
-                    on_click=on_finish_game,
-                    width=340,
-                    height=52,
-                ),
-            ],
+            scroll=ft.ScrollMode.AUTO,
+            controls=controls,
         ),
     )
 

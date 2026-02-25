@@ -81,6 +81,11 @@ class WerewolfApp:
             view_scroll = ft.ScrollMode.AUTO
         elif (
             self.state.selected_tab is GameTab.PROGRESS
+            and self.state.game.phase is GamePhase.FINISHED
+        ):
+            view_scroll = ft.ScrollMode.AUTO
+        elif (
+            self.state.selected_tab is GameTab.PROGRESS
             and self.state.game.phase is GamePhase.VOTING
             and self.state.is_rpp_mode
         ):

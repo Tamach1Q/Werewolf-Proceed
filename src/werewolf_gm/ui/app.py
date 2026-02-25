@@ -4,6 +4,8 @@ import asyncio
 
 import flet as ft
 
+from werewolf_gm.domain import Role
+
 from .state import AppState
 from .tabs import GameTab, build_navigation_bar
 from .views import build_game_tab_content, build_home_view, build_setup_view
@@ -31,20 +33,38 @@ class WerewolfApp:
 
     def _on_route_change(self, _: ft.RouteChangeEvent) -> None:
         self.page.views.clear()
-
-        if self.page.route == "/":
-            self.page.views.append(build_home_view(self.page))
-        elif self.page.route == "/setup":
-            self.page.views.append(build_setup_view(self.page))
-        elif self.page.route == "/game":
-            self.page.views.append(self._build_game_view())
-        else:
-            self.page.views.append(build_setup_view(self.page))
-
+        self.page.views.append(self._build_view_for_route(self.page.route))
         self.page.update()
 
         if self.page.route == "/game":
             self._ensure_timer_loop()
+
+    def _build_view_for_route(self, route: str) -> ft.View:
+        if route == "/":
+            return build_home_view(self.page)
+        if route == "/setup":
+            return build_setup_view(
+                self.page,
+                self.state,
+                on_add_player=self._on_add_player,
+                on_start_game=self._on_start_game,
+            )
+        if route == "/game":
+            return self._build_game_view()
+
+        return build_setup_view(
+            self.page,
+            self.state,
+            on_add_player=self._on_add_player,
+            on_start_game=self._on_start_game,
+        )
+
+    def _refresh_current_view(self) -> None:
+        if not self.page.views:
+            return
+
+        self.page.views[-1] = self._build_view_for_route(self.page.route)
+        self.page.update()
 
     def _build_game_view(self) -> ft.View:
         return ft.View(
@@ -69,12 +89,6 @@ class WerewolfApp:
             ),
         )
 
-    def _refresh_game_view(self) -> None:
-        if self.page.route != "/game" or not self.page.views:
-            return
-        self.page.views[-1] = self._build_game_view()
-        self.page.update()
-
     def _on_navigation_change(self, event: ft.ControlEvent) -> None:
         selected_index = int(event.control.selected_index)
         selected_tab = GameTab(selected_index)
@@ -87,24 +101,45 @@ class WerewolfApp:
         if selected_tab is GameTab.LOG:
             self.state.logs.append("ログ画面を開きました")
 
-        self._refresh_game_view()
+        self._refresh_current_view()
+
+    def _on_add_player(self, name: str, role: Role) -> None:
+        if not name:
+            self._show_message("プレイヤー名を入力してください")
+            return
+
+        try:
+            self.state.game.add_player(name, role)
+        except ValueError as exc:
+            self._show_message(str(exc))
+            return
+
+        self.state.logs.append(f"参加者追加: {name} ({role.value})")
+        self._refresh_current_view()
+
+    def _on_start_game(self, _: ft.ControlEvent) -> None:
+        if not self.state.can_start_game:
+            self._show_message("プレイヤーが不足しています")
+            return
+
+        self.page.go("/game")
 
     def _on_decrease_timer(self, _: ft.ControlEvent) -> None:
         self.state.adjust_timer(-30)
         if self.state.timer_seconds == 0:
             self.state.timer_running = False
-        self._refresh_game_view()
+        self._refresh_current_view()
 
     def _on_increase_timer(self, _: ft.ControlEvent) -> None:
         self.state.adjust_timer(30)
-        self._refresh_game_view()
+        self._refresh_current_view()
 
     def _on_toggle_timer(self, _: ft.ControlEvent) -> None:
         if not self.state.timer_running and self.state.timer_seconds == 0:
             self.state.reset_timer_for_current_phase()
 
         self.state.toggle_timer_running()
-        self._refresh_game_view()
+        self._refresh_current_view()
 
         if self.state.timer_running:
             self._ensure_timer_loop()
@@ -116,7 +151,7 @@ class WerewolfApp:
         self.state.logs.append(
             f"{self.state.game.day}日目 {self.state.game.phase.value} に移行しました"
         )
-        self._refresh_game_view()
+        self._refresh_current_view()
         self._ensure_timer_loop()
 
     def _open_abort_dialog(self) -> None:
@@ -138,7 +173,7 @@ class WerewolfApp:
         if self.confirm_dialog is None:
             return
         self.confirm_dialog.open = False
-        self._refresh_game_view()
+        self._refresh_current_view()
 
     def _confirm_abort(self, _: ft.ControlEvent) -> None:
         self.state.reset_game()
@@ -147,6 +182,11 @@ class WerewolfApp:
             self.confirm_dialog.open = False
 
         self.page.go("/setup")
+
+    def _show_message(self, message: str) -> None:
+        self.page.snack_bar = ft.SnackBar(ft.Text(message))
+        self.page.snack_bar.open = True
+        self.page.update()
 
     def _ensure_timer_loop(self) -> None:
         if self._timer_loop_active:
@@ -168,13 +208,13 @@ class WerewolfApp:
                 self.state.timer_seconds = max(0, self.state.timer_seconds - 1)
 
                 if self.page.route == "/game" and self.state.selected_tab is GameTab.PROGRESS:
-                    self._refresh_game_view()
+                    self._refresh_current_view()
 
             if self.state.timer_seconds == 0:
                 self.state.timer_running = False
                 self.state.logs.append("タイマーが終了しました")
                 if self.page.route == "/game":
-                    self._refresh_game_view()
+                    self._refresh_current_view()
         finally:
             self._timer_loop_active = False
             if self.state.timer_running and self.state.timer_seconds > 0:

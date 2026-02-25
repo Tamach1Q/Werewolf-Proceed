@@ -6,6 +6,8 @@ from werewolf_gm.domain import Game, GamePhase
 
 from .tabs import GameTab
 
+MIN_PLAYERS_TO_START = 4
+
 
 @dataclass(slots=True)
 class AppState:
@@ -24,6 +26,10 @@ class AppState:
         self.logs.clear()
         self.timer_running = True
         self.reset_timer_for_current_phase()
+
+    @property
+    def can_start_game(self) -> bool:
+        return len(self.game.players) >= MIN_PLAYERS_TO_START
 
     def reset_timer_for_current_phase(self) -> None:
         self.timer_seconds = self._initial_seconds_for_phase(self.game.phase)
